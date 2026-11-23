@@ -10,10 +10,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Hybrid">
+<meta name="apple-mobile-web-app-title" content="Kinetiq">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<title>Hybrid – deník</title>
+<title>Kinetiq</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
 <style>
@@ -2325,7 +2325,7 @@ function plOpen(i){
   shShow(exLbl(x.ex),`${plHtml()}<button class="btn" style="margin-top:14px" onclick="plApply(${i})">${t('g_plApply')}</button>`)}
 function plApply(i){const x=S.act.exs[i],G=GSET(),R=plCalc(plS.t,G.bar,G.plates);if(!(plS.t>0)||R.under){shClose();return}
   let s=x.sets.find(q=>!q.done);if(!s){s=wMkSet();x.sets.push(s)}s.kg=R.total;save();shClose();wRenderEx(i)}
-function gTools(){return `<h2>${t('g_plCalc')}</h2><div class="card">${plHtml()}</div><h2>${t('g_1rmCalc')}</h2><div class="card">${rmHtml(0,0)}</div>`}
+function gTools(){return `<h2>${t('g_plCalc')}</h2><div class="card">${plHtml()}</div><h2>${t('g_1rmCalc')}</h2><div class="card">${rmHtml(0,0)}</div>${stHtml()}`}
 /* ---- templates ---- */
 function gTpl(){
   const row=T=>`<button class="wr" onclick="tplView('${T.id}')"><span class="wrl"><b>${esc(tplName(T))}</b><small>${esc(T.exs.slice(0,3).map(e=>exLbl(e.ex)).join(' · '))}${T.exs.length>3?' …':''}</small></span><span class="wrr">${T.exs.length} ${t('exN')}</span>${IC.chv}</button>`;
@@ -4966,7 +4966,7 @@ IC.dl='<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M
 let DLX=null,bkP=null;
 (async()=>{try{if(!window.claude||!claude.use)return;const d=await claude.use('downloads');if(d){DLX=d;if(tab==='prof')render()}}catch(e){}})();
 const bkInArtifact=()=>{try{return window.self!==window.top}catch(e){return true}};
-function bkName(){return 'hybrid-zaloha-'+iso(new Date())+'.json'}
+function bkName(){return 'kinetiq-zaloha-'+iso(new Date())+'.json'}
 function bkText(){return JSON.stringify({app:'hybrid',kind:'backup',v:1,ver:14,at:new Date().toISOString(),data:S,tracks:trAll()})}
 function bkSize(){let n=0;try{n=(localStorage.getItem(K)||'').length+(localStorage.getItem(TRK)||'').length}catch(e){}return n}
 function bkCounts(d,tr){d=d||{};return {food:(d.food||[]).length,cardio:(d.cardio||[]).length,wk:(d.wk||[]).length,ib:(d.ib||[]).length,rc:(d.rc||[]).length,sm:(d.sm||[]).length,races:(d.races||[]).length,tr:Object.keys(tr||{}).length}}
@@ -5042,6 +5042,302 @@ Object.assign(I,{
  bkWarn:['Současná data v aplikaci se nahradí obsahem zálohy. Po obnovení můžeš krok ještě vrátit.','Current data in the app will be replaced by the backup. You can still undo right after restoring.'],
  bkApply:['Nahradit data zálohou','Replace data with backup'],bkFirst:['Nejdřív zálohovat současná data','Back up current data first'],
  bkRestored:['Data obnovena ze zálohy','Data restored from backup']});
+/* ===== Strong CSV import (Gym → Tools) ===== */
+// Strong exercise names that are not in the library → library name (string) or custom exercise [name, equipment, primary, secondary]
+const SMAP={
+'Straight Arm Pull':['Straight Arm Pulldown (Cable)','Cable','lats','dR,triceps'],
+'Biceps Rope':['Rope Curl (Cable)','Cable','biceps','forearms'],
+'Cable Fly Downwards':['Cable Fly – High to Low','Cable','chest','dF'],
+'Seated Row Rope':['Seated Row – Rope (Cable)','Cable','back,lats','biceps,dR'],
+'Lateral Pulldown Narrow Grip':'Lat Pulldown - Close Grip (Cable)',
+'Bayesian Cable Curl':['Bayesian Curl (Cable)','Cable','biceps','forearms'],
+'EZ Barl Curl':'EZ Bar Biceps Curl',
+'High Incline Dumbbell Shrug Row':['High Incline Shrug Row (Dumbbell)','Dumbbell','traps,back','dR'],
+'Chest Fly':['Chest Fly','Machine','chest','dF'],
+'Concentration Hammer Curl':['Concentration Hammer Curl (Dumbbell)','Dumbbell','biceps,forearms',''],
+'T Bar Narrow Grip':['T Bar Row – Narrow Grip','Machine','back,lats','biceps,dR'],
+'One arm row Bench':['One Arm Row – Bench (Dumbbell)','Dumbbell','lats,back','biceps,dR'],
+'Biceps Curl Machine Pod Televizi':['Biceps Curl Machine – pod televizí','Machine','biceps','forearms'],
+'Kickback':['Kickback','Dumbbell','triceps',''],
+'Zap fitness chest press':['Chest Press – Zap Fitness','Machine','chest','triceps,dF'],
+'Overhead Press (Smith Machine)':'Shoulder Press (Smith Machine)',
+'Overhead Extensions Rope':['Overhead Triceps Extension – Rope (Cable)','Cable','triceps',''],
+'Butterfly Suncity':['Butterfly – Suncity','Machine','chest','dF'],
+'Triceps Do Strany U Kabelu Suncity':['Triceps do strany (Cable)','Cable','triceps',''],
+'Cable Fly Upwards':['Cable Fly – Low to High','Cable','chest','dF'],
+'Seated Wide-Grip Row (Cable)':['Seated Row – Wide Grip (Cable)','Cable','back,dR','lats,biceps'],
+'Seitheben Suncity':['Lateral Raise – Suncity','Machine','dS','traps'],
+'Rope Shrug':['Shrug – Rope (Cable)','Cable','traps','forearms'],
+'Hipthrust machine':'Hip Thrust (Machine)',
+'Ez Bar Triceps Extension':['Triceps Extension (EZ Bar)','Barbell','triceps',''],
+'Latzug Suncity':['Lat Pulldown – Suncity','Machine','lats','biceps,back'],
+'One Arm Row Bench Both Hands':['Row – Bench, both hands (Dumbbell)','Dumbbell','back,lats','biceps,dR'],
+'Chest Fly Dolu Veliky':['Chest Fly dolů velký','Machine','chest','dF'],
+'Vedený Bench Press Suncity':'Bench Press (Smith Machine)',
+'Chest Push':['Chest Push','Machine','chest','triceps,dF'],
+'Pec fly Suncity':['Pec Fly – Suncity','Machine','chest','dF'],
+'Mts triceps Extension':['Triceps Extension – MTS','Machine','triceps',''],
+'Seated Row Machine Zap Gym':['Seated Row Machine – Zap Fitness','Machine','back,lats','biceps,dR'],
+'Zap triceps pushdown V bar':['Triceps Pushdown V-Bar – Zap Fitness','Cable','triceps',''],
+'Iso Lateral D Y Row Suncity':['Iso-Lateral D.Y. Row – Suncity','Machine','back,lats','biceps,dR'],
+'Standing Overhead Press Suncigy':['Standing Overhead Press – Suncity','Machine','shoulders','triceps'],
+'Bicep curl machine Enermeca':['Biceps Curl Machine – Enermeca','Machine','biceps','forearms'],
+'Front Squat Machine':['Front Squat (Machine)','Machine','quads','glutes'],
+'Chest Weighted Dip':'Chest Dip (Weighted)',
+'Zap Fitness Overhead Press Machine':['Overhead Press Machine – Zap Fitness','Machine','shoulders','triceps'],
+'Straight Bar Pushdown Enermeca':['Triceps Pushdown Straight Bar – Enermeca','Cable','triceps',''],
+'Suncity Bendover Row Za Incline Benchem':['Bent Over Row za incline benchem – Suncity','Barbell','back,lats','biceps,dR,erec'],
+'Incline Bench Za Vedeným Benchem':['Incline Bench za vedeným benchem','Barbell','chest,dF','triceps'],
+'Bicep Curl Straight Bar':['Bicep Curl – Straight Bar (Cable)','Cable','biceps','forearms'],
+'Seated Overhead Press Machine':'Shoulder Press (Machine)',
+'Incline press enermeca':['Incline Press – Enermeca','Machine','chest,dF','triceps'],
+'Seated Pull Machine':['Seated Pull Machine','Machine','back,lats','biceps'],
+'Zap fitness seated  row normal grip':['Seated Row – Zap Fitness','Machine','back,lats','biceps,dR'],
+'Lower Pec Dumbbell':['Lower Pec (Dumbbell)','Dumbbell','chest','triceps'],
+'Zap Fitness Wide Grip Seated Row':['Seated Row Wide Grip – Zap Fitness','Machine','back,dR','lats,biceps'],
+'Rope Hammer Curl':'Hammer Curl (Cable)',
+'Iso-lateral High Row':['Iso-Lateral High Row (Machine)','Machine','lats,back','biceps'],
+'Peck deck Enermeca':['Pec Deck – Enermeca','Machine','chest','dF'],
+'Barbell Row Underhand Smith Machine':['Bent Over Row - Underhand (Smith Machine)','Smith Machine','back,lats','biceps'],
+'Chest press korea university':['Chest Press – Korea University','Machine','chest','triceps,dF'],
+'Seated cable fly Na Lavičce':['Seated Cable Fly na lavičce','Cable','chest','dF'],
+'Zap pec deck':['Pec Deck – Zap Fitness','Machine','chest','dF'],
+'Explosive Pull Up':['Explosive Pull Up','Bodyweight','lats','biceps,back'],
+'Copenhagen':['Copenhagen Plank','Time','addu','obl,abs'],
+'Suncity Row Obe Ruce':['Row obě ruce – Suncity','Machine','back,lats','biceps,dR'],
+'Pullover (Machine)':['Pullover (Machine)','Machine','lats','chest,triceps'],
+'Leg Extension Single Leg':['Leg Extension – Single Leg (Machine)','Machine','quads',''],
+'Shoulder press Enermeca':['Shoulder Press – Enermeca','Machine','shoulders','triceps'],
+'Bicep hammer curl enermeca cable':['Hammer Curl Cable – Enermeca','Cable','biceps,forearms',''],
+'Lat pulldown korea university':['Lat Pulldown – Korea University','Machine','lats','biceps,back'],
+'Hammer Strength Decline Press Enermeca':['Hammer Strength Decline Press – Enermeca','Machine','chest','triceps'],
+'Seated dip enermeca':['Seated Dip – Enermeca','Machine','triceps','chest'],
+'Overhead extension striaght bar enermeca':['Overhead Extension Straight Bar – Enermeca','Cable','triceps',''],
+'One Arm Row Rope':['One Arm Row – Rope (Cable)','Cable','lats,back','biceps'],
+'Side Oblique Crunch':['Side Oblique Crunch','Bodyweight','obl','abs'],
+'Pulldown Suncity U Skiergu':['Lat Pulldown u skiergu – Suncity','Cable','lats','biceps,back'],
+'Bulgarian split squat smith':['Bulgarian Split Squat (Smith Machine)','Smith Machine','quads,glutes','hams'],
+'Upright Row Barbell':['Upright Row (Barbell)','Barbell','traps,dS','biceps'],
+'Hammer strength row underhand enermeca Vedle Peckdecku':['Hammer Strength Row Underhand – Enermeca','Machine','back,lats','biceps'],
+'Spodek Prsou, S Kladkama Nahoru':['Cable Fly – Low to High','Cable','chest','dF'],
+'Cable Fly Upwards Na Spodek Prsou':['Cable Fly – Low to High','Cable','chest','dF'],
+'Chest Supported T-Bar Row':['Chest Supported T-Bar Row','Machine','back,lats','biceps,dR'],
+'Dragon fly':['Dragon Flag','Bodyweight','abs','obl'],
+'Lat Pulldown (Single Arm)':['Lat Pulldown – Single Arm (Cable)','Cable','lats','biceps'],
+'One arm row Cable':['One Arm Row (Cable)','Cable','lats,back','biceps'],
+'Seated Row Korea University Narrow Grip':['Seated Row Narrow Grip – Korea University','Machine','back,lats','biceps'],
+'Reverse Fly Korea University':['Reverse Fly – Korea University','Machine','dR','back,traps'],
+'Lateral raise machine enermeca':['Lateral Raise Machine – Enermeca','Machine','dS','traps'],
+'Seated row enermeca u oken':['Seated Row u oken – Enermeca','Machine','back,lats','biceps,dR'],
+'Mts Shoulder Press Enermeca':['Shoulder Press – MTS','Machine','shoulders','triceps'],
+'New tech seated legpress enermeca':['Seated Leg Press – Enermeca','Machine','quads,glutes','hams'],
+'Lateral raise korea university':['Lateral Raise – Korea University','Machine','dS','traps'],
+'Overhead extension rope Enermeca':['Overhead Triceps Extension – Rope (Cable)','Cable','triceps',''],
+'Lateral Raise Seated':['Lateral Raise – Seated (Dumbbell)','Dumbbell','dS','traps'],
+'Deficit Pushup':['Deficit Push Up','Bodyweight','chest','triceps,dF'],
+'Seated Row Wide Grip':['Seated Row – Wide Grip (Cable)','Cable','back,dR','lats,biceps'],
+'Dragon fly Lowering Only':['Dragon Flag – Lowering Only','Bodyweight','abs','obl'],
+'Zap Fitness Seated Overhead Press S Kabelama':['Seated Overhead Press s kabely – Zap Fitness','Cable','shoulders','triceps'],
+'Rear Delt':['Rear Delt (Machine)','Machine','dR','back,traps'],
+'Suncity Fly':['Pec Fly – Suncity','Machine','chest','dF'],
+'Seated Leg Press (Machine)':'Leg Press',
+'Cable fly':'Chest Fly (Cable)',
+'Shoulder Press (Plate Loaded)':['Shoulder Press (Plate Loaded)','Machine','shoulders','triceps'],
+'Barbell Row Smith Machine Overhand':['Bent Over Row (Smith Machine)','Smith Machine','back,lats','biceps,dR'],
+'Zap fitness seated leg curl':['Seated Leg Curl – Zap Fitness','Machine','hams',''],
+'Zap leg extensiosn':['Leg Extension – Zap Fitness','Machine','quads',''],
+'Chest press na vršek Vedle Trnů A Divného Stroje Na Prsa Suncity':['Upper Chest Press – Suncity','Machine','chest,dF','triceps'],
+'Seated row korea university wide grip':['Seated Row Wide Grip – Korea University','Machine','back,dR','lats,biceps'],
+'Ab crunch korea university':['Ab Crunch – Korea University','Machine','abs',''],
+'Biceps Rope Korea University':['Rope Curl – Korea University','Cable','biceps','forearms'],
+'Straight arm pulldown korea university':['Straight Arm Pulldown – Korea University','Cable','lats','dR,triceps'],
+'Mts front pulldown Enermeca':['Front Pulldown – MTS','Machine','lats','biceps,back'],
+'Face pull enermeca':'Face Pull (Cable)',
+'Enermeca crunch machine':['Crunch Machine – Enermeca','Machine','abs',''],
+'Reverse fly u oken enermeca':['Reverse Fly u oken – Enermeca','Machine','dR','back,traps'],
+'Hammer strength lateral raise':['Hammer Strength Lateral Raise','Machine','dS','traps'],
+'Upright row smith machine':['Upright Row (Smith Machine)','Smith Machine','traps,dS','biceps'],
+'Chest press enermeca vedle incline pressu':['Chest Press vedle incline pressu – Enermeca','Machine','chest','triceps,dF'],
+'Mts high row Enermeca':['High Row – MTS','Machine','lats,back','biceps'],
+'Dip Machine':['Dip (Machine)','Machine','triceps','chest'],
+'Lat Pull Ze Strany':['Lat Pull ze strany (Cable)','Cable','lats','biceps'],
+'Baumaschine I':['Baumaschine I','Machine','full',''],
+'Crunch machine korea uni':['Ab Crunch – Korea University','Machine','abs',''],
+'Abs - Legs Up':['Abs – Legs Up','Bodyweight','abs',''],
+'Wrist Curl':'Wrist Curl (Dumbbell)',
+'Triceps Extension':'Triceps Extension (Cable)',
+'Suncity Shoulder Press':['Shoulder Press – Suncity','Machine','shoulders','triceps'],
+'Chest Press Vpravo Od Vedeneho Benche':['Chest Press vpravo od vedeného benche','Machine','chest','triceps,dF'],
+'Lying Leg Curl Single Leg':['Lying Leg Curl – Single Leg (Machine)','Machine','hams',''],
+'Seated Dip':['Dip (Machine)','Machine','triceps','chest'],
+'Seated Concentration Dumbbell Curl':'Concentration Curl (Dumbbell)',
+'Assisted Wide Grip Pull-up Zap':'Pull Up (Assisted)',
+'Triceps extension machine korea university':['Triceps Extension Machine – Korea University','Machine','triceps',''],
+'Glute Kickback (Machine)':['Glute Kickback (Machine)','Machine','glutes','hams'],
+'Calf Press on Seated Leg Press':'Calf Press on Leg Press',
+'Abs Pritahy Zaklon':['Abs přítahy v záklonu','Bodyweight','abs',''],
+'Triceps Pushdown Jednokladka':['Triceps Pushdown – jednokladka','Cable','triceps',''],
+'Incline bench Hammer Curl':['Incline Hammer Curl (Dumbbell)','Dumbbell','biceps,forearms',''],
+'One Arm Row Machine Suncity':['One Arm Row Machine – Suncity','Machine','lats,back','biceps'],
+'One arm row ze Země Suncity':['One Arm Row ze země – Suncity','Dumbbell','lats,back','biceps'],
+'Triceps Dip (Assisted)':['Triceps Dip (Assisted)','Machine','triceps','chest'],
+'One arm Triceps':['One Arm Triceps Extension (Cable)','Cable','triceps',''],
+'Biceps Curl Machine Suncity':['Biceps Curl Machine – Suncity','Machine','biceps','forearms'],
+'Chest Fly Suncity U Sani':['Chest Fly u saní – Suncity','Machine','chest','dF'],
+'Shrug Na Seated Row':['Shrug na seated row','Cable','traps',''],
+'Cable Rear Delt Fly':'Reverse Fly (Cable)',
+'Forearm Curl':'Wrist Curl (Dumbbell)',
+'Zap Stahovani Kladky Na Seated Row':['Stahování kladky na seated row – Zap Fitness','Cable','lats','biceps'],
+'Lower pec fly Zap':['Lower Pec Fly – Zap Fitness','Cable','chest','dF'],
+'Zap ab crunch':['Ab Crunch – Zap Fitness','Machine','abs',''],
+'Sested Row Machine Zap Fitness Trapez':['Seated Row Machine (trapézy) – Zap Fitness','Machine','traps,back','dR'],
+'One Leg RDL Kettlebell':['Single Leg RDL (Kettlebell)','Kettlebell','hams,glutes','erec'],
+'Cbum Lat Raise':['Cbum Lateral Raise (Cable)','Cable','dS','traps'],
+'Overhead press to toe touch':['Overhead Press to Toe Touch','Dumbbell','shoulders','abs'],
+'One Arm Pulldown Klárka Na Kabelu':['Lat Pulldown – Single Arm (Cable)','Cable','lats','biceps'],
+'Rdl U Sledu Suncity':['Romanian Deadlift u sledu – Suncity','Barbell','hams,glutes','erec'],
+'Iso lateral Shoulder Press Reverse Suncity':['Iso-Lateral Shoulder Press Reverse – Suncity','Machine','shoulders','triceps'],
+'Triceps kickback korea uni':['Triceps Kickback – Korea University','Cable','triceps',''],
+'One arm row zapřený o bench korea uni':['One Arm Row zapřený o bench (Dumbbell)','Dumbbell','lats,back','biceps'],
+'Facepull Korea university':'Face Pull (Cable)',
+'Seated overhead press smith machine korea university':'Shoulder Press (Smith Machine)',
+'Bulgarian Split Squat':'Bulgarian Split Squat (Dumbbell)',
+'Romanian deadlift single leg':'Single Leg Romanian Deadlift (Dumbbell)',
+'Hip Thrust (Bodyweight)':'Glute Bridge',
+'Seated Row Kotouče Enermeca':['Seated Row na kotouče – Enermeca','Machine','back,lats','biceps'],
+'Squat BB machine enermeca':['Squat Machine – Enermeca','Machine','quads,glutes','hams'],
+'Hip Thrust Machine Enermeca':['Hip Thrust Machine – Enermeca','Machine','glutes','hams'],
+'Butterfly machine enermeca':['Butterfly – Enermeca','Machine','chest','dF'],
+'M Torture High Row Enermeca':['High Row M-Torture – Enermeca','Machine','lats,back','biceps'],
+'Chest Supported T Bar Row Wide Grip':['Chest Supported T-Bar Row – Wide Grip','Machine','back,dR','lats,biceps'],
+'Mts Incline Press':['Incline Press – MTS','Machine','chest,dF','triceps'],
+'Sested leg curl enermeca':['Seated Leg Curl – Enermeca','Machine','hams',''],
+'Lex extension cybex enermeca':['Leg Extension Cybex – Enermeca','Machine','quads',''],
+'Hammer Strength Iso Lateral Shoulder Press':['Hammer Strength Iso-Lateral Shoulder Press','Machine','shoulders','triceps'],
+'Drax abdominal':['Abdominal – Drax','Machine','abs',''],
+'Drax Chest Press Enermeca':['Chest Press Drax – Enermeca','Machine','chest','triceps,dF'],
+'Drax Lateral Raise':['Lateral Raise – Drax','Machine','dS','traps'],
+'Lateral Raise Ve Stoje':'Lateral Raise (Dumbbell)',
+'Rear Delt Raises':['Rear Delt Raise (Dumbbell)','Dumbbell','dR','back,traps'],
+'Hack Squat':'Hack Squat (Machine)',
+'Dip Machine Back':['Dip Machine Back','Machine','triceps','chest'],
+'Pushdown Chest':['Pushdown Chest','Cable','chest','triceps'],
+'Oblique Side Cable Crunch':['Oblique Cable Crunch','Cable','obl','abs'],
+'Pendulum Squat':['Pendulum Squat (Machine)','Machine','quads','glutes'],
+'Zap Fitness Legpress':['Leg Press – Zap Fitness','Machine','quads,glutes','hams'],
+'Toes To Hands Core Zap':['Toes to Hands (core)','Bodyweight','abs',''],
+'Biceps Machine Suncity':['Biceps Curl Machine – Suncity','Machine','biceps','forearms'],
+'Straight bar curl Enermeca':['Straight Bar Curl – Enermeca','Cable','biceps','forearms'],
+'Chest press vedle butterfly enermeca':['Chest Press vedle butterfly – Enermeca','Machine','chest','triceps,dF'],
+'Tibialis Raises':['Tibialis Raise','Bodyweight','calves',''],
+'Stepdown':['Step Down','Bodyweight','quads,glutes',''],
+'Step-up':['Step Up','Bodyweight','quads,glutes','hams'],
+'Rdl':'Romanian Deadlift (Barbell)'};
+
+// --- user's answers (23. 11.): merge gym variants into one exercise, delete unclear ones ---
+Object.assign(SMAP,{
+'Chest Fly':null,'Chest Push':null,'Chest Fly Dolu Veliky':null,'Pushdown Chest':null,'Dip Machine Back':null,'One arm Triceps':null,'Overhead press to toe touch':null,'Abs Pritahy Zaklon':null,'Rear Delt':null,
+'Kickback':'Triceps Kickback (Dumbbell)','Triceps kickback korea uni':'Triceps Kickback (Dumbbell)',
+'Seated Pull Machine':['Seated Pull (Machine)','Machine','back,lats','biceps,dR'],
+'Lower Pec Dumbbell':['Lower Pec Press (Dumbbell)','Dumbbell','chest','dF,triceps'],
+'Iso Lateral D Y Row Suncity':['Iso-Lateral D.Y. Row','Machine','back,lats','biceps,dR'],
+'Zap fitness chest press':'Chest Press (Machine)','Chest press korea university':'Chest Press (Machine)','Drax Chest Press Enermeca':'Chest Press (Machine)','Chest Press Vpravo Od Vedeneho Benche':'Chest Press (Machine)','Chest press vedle butterfly enermeca':'Chest Press (Machine)','Chest press enermeca vedle incline pressu':'Chest Press (Machine)',
+'Chest press na vršek Vedle Trnů A Divného Stroje Na Prsa Suncity':'Incline Chest Press (Machine)','Incline press enermeca':'Incline Chest Press (Machine)','Mts Incline Press':'Incline Chest Press (Machine)',
+'Butterfly Suncity':'Chest Fly (Machine)','Butterfly machine enermeca':'Chest Fly (Machine)','Pec fly Suncity':'Chest Fly (Machine)','Suncity Fly':'Chest Fly (Machine)','Peck deck Enermeca':'Chest Fly (Machine)','Zap pec deck':'Chest Fly (Machine)','Chest Fly Suncity U Sani':'Chest Fly (Machine)',
+'Hammer Strength Decline Press Enermeca':['Decline Press (Machine)','Machine','chest','triceps'],
+'Latzug Suncity':'Lat Pulldown (Cable)','Lat pulldown korea university':'Lat Pulldown (Cable)','Pulldown Suncity U Skiergu':'Lat Pulldown (Cable)','Zap Stahovani Kladky Na Seated Row':'Lat Pulldown (Cable)','Mts front pulldown Enermeca':'Lat Pulldown (Machine)',
+'Seated Row Machine Zap Gym':'Seated Row (Machine)','Zap fitness seated  row normal grip':'Seated Row (Machine)','Seated Row Korea University Narrow Grip':'Seated Row (Machine)','Seated row enermeca u oken':'Seated Row (Machine)','Seated Row Kotouče Enermeca':'Seated Row (Machine)','Suncity Row Obe Ruce':'Seated Row (Machine)',
+'Zap Fitness Wide Grip Seated Row':['Seated Row – Wide Grip (Cable)','Cable','back,dR','lats,biceps'],'Seated row korea university wide grip':['Seated Row – Wide Grip (Cable)','Cable','back,dR','lats,biceps'],
+'Seitheben Suncity':'Lateral Raise (Machine)','Lateral raise korea university':'Lateral Raise (Machine)','Lateral raise machine enermeca':'Lateral Raise (Machine)','Drax Lateral Raise':'Lateral Raise (Machine)','Hammer strength lateral raise':'Lateral Raise (Machine)',
+'Shoulder press Enermeca':'Shoulder Press (Machine)','Mts Shoulder Press Enermeca':'Shoulder Press (Machine)','Zap Fitness Overhead Press Machine':'Shoulder Press (Machine)','Standing Overhead Press Suncigy':'Shoulder Press (Machine)','Suncity Shoulder Press':'Shoulder Press (Machine)','Hammer Strength Iso Lateral Shoulder Press':'Shoulder Press (Machine)','Iso lateral Shoulder Press Reverse Suncity':'Shoulder Press (Machine)','Shoulder Press (Plate Loaded)':'Shoulder Press (Machine)',
+'Biceps Curl Machine Pod Televizi':'Bicep Curl (Machine)','Bicep curl machine Enermeca':'Bicep Curl (Machine)','Biceps Curl Machine Suncity':'Bicep Curl (Machine)','Biceps Machine Suncity':'Bicep Curl (Machine)',
+'Biceps Rope Korea University':['Rope Curl (Cable)','Cable','biceps','forearms'],'Straight bar curl Enermeca':'Bicep Curl (Cable)','Bicep Curl Straight Bar':'Bicep Curl (Cable)','Bicep hammer curl enermeca cable':'Hammer Curl (Cable)',
+'Straight Bar Pushdown Enermeca':'Triceps Pushdown (Cable - Straight Bar)','Zap triceps pushdown V bar':['Triceps Pushdown – V-Bar (Cable)','Cable','triceps',''],
+'Overhead extension striaght bar enermeca':['Overhead Triceps Extension – Straight Bar (Cable)','Cable','triceps',''],
+'Mts triceps Extension':'Triceps Extension (Machine)','Triceps extension machine korea university':'Triceps Extension (Machine)',
+'Seated dip enermeca':['Dip (Machine)','Machine','triceps','chest'],
+'Reverse Fly Korea University':'Reverse Fly (Machine)','Reverse fly u oken enermeca':'Reverse Fly (Machine)',
+'Straight arm pulldown korea university':['Straight Arm Pulldown (Cable)','Cable','lats','dR,triceps'],
+'Ab crunch korea university':'Crunch (Machine)','Crunch machine korea uni':'Crunch (Machine)','Enermeca crunch machine':'Crunch (Machine)','Zap ab crunch':'Crunch (Machine)','Drax abdominal':'Crunch (Machine)',
+'Zap leg extensiosn':'Leg Extension (Machine)','Lex extension cybex enermeca':'Leg Extension (Machine)','Zap fitness seated leg curl':'Seated Leg Curl (Machine)','Sested leg curl enermeca':'Seated Leg Curl (Machine)',
+'Zap Fitness Legpress':'Leg Press','New tech seated legpress enermeca':'Leg Press','Squat BB machine enermeca':['Squat (Machine)','Machine','quads,glutes','hams'],
+'Hip Thrust Machine Enermeca':'Hip Thrust (Machine)',
+'Mts high row Enermeca':['Iso-Lateral High Row (Machine)','Machine','lats,back','biceps'],'M Torture High Row Enermeca':['Iso-Lateral High Row (Machine)','Machine','lats,back','biceps'],
+'Hammer strength row underhand enermeca Vedle Peckdecku':['Hammer Strength Row Underhand','Machine','back,lats','biceps'],
+'One Arm Row Machine Suncity':'Iso-Lateral Row (Machine)',
+'One arm row ze Země Suncity':'Bent Over One Arm Row (Dumbbell)','One arm row zapřený o bench korea uni':'Bent Over One Arm Row (Dumbbell)','One arm row Bench':'Bent Over One Arm Row (Dumbbell)',
+'Suncity Bendover Row Za Incline Benchem':'Bent Over Row (Barbell)','Incline Bench Za Vedeným Benchem':'Incline Bench Press (Barbell)','Rdl U Sledu Suncity':'Romanian Deadlift (Barbell)',
+'Zap Fitness Seated Overhead Press S Kabelama':['Seated Overhead Press (Cable)','Cable','shoulders','triceps'],
+'Sested Row Machine Zap Fitness Trapez':['Seated Row Machine – trapézy','Machine','traps,back','dR'],
+'Lower pec fly Zap':['Cable Fly – Low to High','Cable','chest','dF'],
+'Toes To Hands Core Zap':['Toes to Hands (core)','Bodyweight','abs','']});
+// typo fixes the user confirmed: date|exercise|wrong reps → right reps
+const SFIX={'2025-01-30|Straight Arm Pull|174':17,'2026-11-12|Lat Pulldown (Cable)|96':9};
+// old cable sets logged as stack pin numbers (Dec 2024 – May 2025): drop sets far below the exercise's usual weight
+const SLOW={from:'2024-12-01',to:'2025-05-31',ratio:.35};
+let STP=null; // parsed pending import
+function stCsv(txt){const out=[];let row=[],f='',q=false;for(let i=0;i<txt.length;i++){const c=txt[i];
+  if(q){if(c==='"'){if(txt[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+  else if(c==='"')q=true;else if(c===','){row.push(f);f=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&txt[i+1]==='\n')i++;row.push(f);f='';if(row.length>1||row[0]!=='')out.push(row);row=[]}else f+=c}
+  if(f!==''||row.length){row.push(f);out.push(row)}return out}
+function stTs(s){const m=String(s).match(/^(\d{4})-(\d\d)-(\d\d)[ T](\d{1,2}):(\d\d)(?::(\d\d))?\s*(AM|PM)?/i);if(!m)return null;let h=+m[4];if(m[7]){const pm=/pm/i.test(m[7]);if(h===12)h=pm?12:0;else if(pm)h+=12}
+  return {d:`${m[1]}-${m[2]}-${m[3]}`,t:new Date(+m[1],+m[2]-1,+m[3],h,+m[5],+(m[6]||0)).getTime(),h}}
+function stDur(s){const h=/(\d+)\s*h/.exec(s),m=/(\d+)\s*m(?!s)/.exec(s);return (h?+h[1]*60:0)+(m?+m[1]:0)}
+function stHash(n){let x=n%2147483647;x=(x*16807)%2147483647;x=(x*16807)%2147483647;return x/2147483647}
+function stExName(src){if(src in SMAP&&SMAP[src]===null)return {del:true};if(exOf(src))return {name:exOf(src)[1]};const m=SMAP[src];if(typeof m==='string')return {name:m};
+  if(m)return {name:m[0],cx:{name:m[0],eq:m[1],p:m[2].split(',').filter(Boolean),s:m[3].split(',').filter(Boolean)}};
+  return {name:src,cx:{name:src,eq:'Other',p:['full'],s:[]},unk:true}}
+function stParse(txt,skip){const R=stCsv(txt.replace(/^﻿/,''));if(R.length<2)return null;const H=R[0].map(x=>x.trim().toLowerCase());
+  const ix=k=>H.indexOf(k),iD=ix('date'),iN=ix('workout name'),iU=ix('duration'),iE=ix('exercise name'),iO=ix('set order'),iW=ix('weight'),iR=ix('reps'),iS=ix('seconds'),iP=ix('rpe'),iNo=ix('notes');
+  if(iD<0||iE<0||iW<0||iR<0)return null;
+  const W=new Map();let bad=0;
+  for(const r of R.slice(1)){if(r.length<H.length-2)continue;const ts=stTs(r[iD]);if(!ts){bad++;continue}const k=r[iD];if(!W.has(k))W.set(k,{ts,name:iN>=0?r[iN]:'',dur:iU>=0?stDur(r[iU]):0,rows:[]});W.get(k).rows.push(r)}
+  const med={};{const by={};for(const w of W.values())for(const r of w.rows){const k=(r[iE]||'').trim(),v=pf(r[iW])||0;if(v>0)(by[k]=by[k]||[]).push(v)}for(const k in by){const a=by[k].sort((x,y)=>x-y);med[k]=a[a.length>>1]}}
+  let list=[...W.values()].sort((a,b)=>a.ts.t-b.ts.t);const total=list.length;if(skip>0)list=list.slice(skip);
+  const have=new Set(S.wk.map(w=>String(w.id))),cxs=new Map(),unk=new Set(),fixed=[],dropped=[],sus=[];let dup=0,sets=0,nDel=0,nLow=0,nFix=0;const wk=[],ss=[];
+  list.forEach(w=>{const id='st'+w.ts.t;if(have.has(id)){dup++;return}
+    let dur=w.dur;if(!(dur>=10&&dur<=180)){fixed.push(w.ts.d);dur=60+Math.round(stHash(w.ts.t)*30)}
+    const out=[];
+    w.rows.forEach(r=>{const src=(r[iE]||'').trim();if(!src)return;const e=stExName(src);if(e.del){nDel++;return}if(e.unk)unk.add(src);if(e.cx&&!cxs.has(e.cx.name))cxs.set(e.cx.name,e.cx);
+      const tm=e.cx?e.cx.eq==='Time':isTime(e.name);const sec=iS>=0?Math.round(pf(r[iS])||0):0,kg=Math.round((pf(r[iW])||0)*100)/100;let reps=Math.floor(pf(r[iR])||0);const fx=SFIX[w.ts.d+'|'+src+'|'+reps];if(fx){reps=fx;nFix++}
+      const ceq=e.cx?e.cx.eq:(exOf(e.name)||[])[4];if(ceq==='Cable'&&w.ts.d>=SLOW.from&&w.ts.d<=SLOW.to&&kg>0&&med[src]&&kg<SLOW.ratio*med[src]){nLow++;return}
+      const rr=tm?(sec||reps):reps;if(!(rr>0)){dropped.push(w.ts.d+' '+src);return}
+      if(!tm&&kg>0&&reps>60)sus.push(`${w.ts.d} · ${src} · ${nf(kg)} kg × ${reps}`);
+      const o=String(iO>=0?r[iO]:'').trim().toUpperCase(),rpe=iP>=0?pf(r[iP])||0:0;
+      out.push({id:'s'+w.ts.t+'_'+out.length,date:w.ts.d,ex:e.name,kg:tm?0:kg,reps:rr,time:tm,wid:id,ty:o==='D'?'d':o==='W'?'w':o==='F'?'f':'n',rpe:rpe>0&&rpe<=10?rpe:0,ss:0,rs:0})});
+    if(!out.length)return;
+    const gen=/^(early morning|morning|midday|afternoon|evening|night|late night)?\s*workout$/i.test(w.name.trim());
+    const work=out.filter(s=>s.ty!=='w');
+    wk.push({id,date:w.ts.d,name:gen||!w.name.trim()?t(w.ts.h<11?'g_nm_m':w.ts.h<17?'g_nm_a':'g_nm_e'):w.name.trim(),t0:w.ts.t,dur:dur*60,note:'',tpl:'',n:work.length,vol:Math.round(work.reduce((q,s)=>q+gVol(s),0)),nEx:new Set(out.map(s=>exId(s.ex))).size,prs:[],src:'strong'});
+    ss.push(...out);sets+=out.length});
+  const newCx=[...cxs.values()].filter(c=>!exOf(c.name));
+  return {wk,ss,newCx,unk:[...unk],fixed,dropped,sus,dup,nDel,nLow,nFix,total,skip:skip||0,bad,from:wk.length?wk[0].date:'',to:wk.length?wk[wk.length-1].date:''}}
+function stPick(){const f=document.getElementById('stf');if(f)f.click()}
+function stFile(inp){const f=inp.files&&inp.files[0];inp.value='';if(!f)return;const fr=new FileReader();fr.onload=()=>{STP={txt:String(fr.result||'')};stPrev()};fr.onerror=()=>toast(t('stBad'));fr.readAsText(f)}
+function stPrev(){if(!STP)return;const sk=Math.max(0,Math.floor(pf(STP.skip)||0));const r=stParse(STP.txt,sk);if(!r){STP=null;toast(t('stBad'));return}STP.r=r;STP.skip=sk;
+  const li=(a,n)=>a.length?`<ul class="stl">${a.slice(0,n).map(x=>`<li>${esc(x)}</li>`).join('')}${a.length>n?`<li>… +${a.length-n}</li>`:''}</ul>`:'';
+  shShow(t('stT'),`<div class="bkg"><div class="bkc"><span>${t('stWk')}</span><b>${r.wk.length}</b><em></em></div><div class="bkc"><span>${t('stSets')}</span><b>${nf(r.ss.length)}</b><em></em></div><div class="bkc"><span>${t('stRange')}</span><b style="grid-column:2/4">${r.from?dstr(r.from,{day:'numeric',month:'numeric',year:'numeric'})+' – '+dstr(r.to,{day:'numeric',month:'numeric',year:'numeric'}):'–'}</b></div><div class="bkc"><span>${t('stCx')}</span><b>${r.newCx.length}</b><em></em></div>${r.dup?`<div class="bkc"><span>${t('stDup')}</span><b>${r.dup}</b><em></em></div>`:''}</div>
+  <div class="f" style="margin:0 0 10px"><div class="w4"><label for="stsk">${t('stSkip')} (${r.total})</label><input id="stsk" inputmode="numeric" value="${sk||''}" placeholder="0" onchange="STP.skip=this.value;stPrev()"></div></div>
+  ${r.fixed.length?`<div class="note" style="margin:0 0 8px">${t('stFixed').replace('{n}',r.fixed.length)}</div>`:''}
+  ${r.nDel||r.nLow||r.nFix?`<div class="note" style="margin:0 0 8px">${t('stClean').replace('{d}',r.nDel).replace('{l}',r.nLow).replace('{f}',r.nFix)}</div>`:''}
+  ${r.dropped.length?`<div class="note" style="margin:0 0 8px">${t('stDropped').replace('{n}',r.dropped.length)}</div>`:''}
+  ${r.sus.length?`<div class="bkw">${t('stSus')}${li(r.sus,6)}</div>`:''}
+  ${r.unk.length?`<div class="bkw">${t('stUnk')}${li(r.unk,8)}</div>`:''}
+  <button class="btn" ${r.wk.length?'':'disabled'} onclick="stApply()">${t('stGo').replace('{n}',r.wk.length)}</button>`)}
+let stLast=null;
+function stApply(){if(!STP||!STP.r)return;const r=STP.r;S.cx=S.cx||[];const addCx=r.newCx.filter(c=>!exOf(c.name)).map(c=>({id:uid(),name:c.name,p:c.p,s:c.s,eq:c.eq,src:'strong'}));
+  S.cx.push(...addCx);exC=null;S.wk.push(...r.wk);S.sets.push(...r.ss);stLast={w:r.wk.map(w=>w.id),cx:addCx.map(c=>c.id)};STP=null;
+  try{save()}catch(e){}shClose();render();toast(t('stDone').replace('{n}',r.wk.length),{act:t('undo'),fn:'stUndo()',ms:9000})}
+function stUndo(){if(!stLast)return;const w=new Set(stLast.w),c=new Set(stLast.cx);S.wk=S.wk.filter(x=>!w.has(x.id));S.sets=S.sets.filter(s=>!w.has(s.wid));S.cx=(S.cx||[]).filter(x=>!c.has(x.id));exC=null;stLast=null;save();render()}
+function stHtml(){return `<h2>${t('stH')}</h2><div class="card bk"><div class="bkr"><div class="bki">${IC.upload}</div><div><b>${t('stHead')}</b><span>${t('stDesc')}</span></div></div>
+  <button class="btn bkx" style="margin-top:14px" onclick="stPick()">${IC.upload}<span>${t('stBtn')}</span></button>
+  <input type="file" id="stf" accept=".csv,text/csv,text/plain" hidden onchange="stFile(this)"></div>`}
+Object.assign(I,{stH:['Import','Import'],stHead:['Import ze Strongu','Import from Strong'],
+ stDesc:['Nahraj CSV export ze Strongu (Settings → Export Strong Data). Tréninky se přidají k historii, nic se nepřepíše a opakovaný import nevytvoří duplikáty.','Upload the CSV export from Strong (Settings → Export Strong Data). Workouts are added to your history, nothing is overwritten and importing again creates no duplicates.'],
+ stBtn:['Vybrat CSV soubor','Choose CSV file'],stT:['Import ze Strongu','Import from Strong'],stWk:['Tréninky k importu','Workouts to import'],stSets:['Série','Sets'],stRange:['Období','Period'],stCx:['Nové vlastní cviky','New custom exercises'],stDup:['Už importované (přeskočím)','Already imported (skipped)'],
+ stSkip:['Přeskočit nejstarších tréninků','Skip oldest workouts'],stFixed:['{n}× nesmyslná délka tréninku (zapomenuté vypnutí) → nastavím 60–90 min.','{n}× implausible workout duration (left running) → set to 60–90 min.'],
+ stDropped:['{n} sérií bez opakování vynechám.','{n} sets without reps will be skipped.'],stSus:['Podezřele vysoký počet opakování – zkontroluj:','Suspiciously high reps – please check:'],stUnk:['Neznámé cviky (založím jako vlastní):','Unknown exercises (will be added as custom):'],
+ stClean:['Úklid podle tvých odpovědí: {d} sérií smazaných cviků, {l} starých sérií na kladce s čísly závaží, {f} opravené překlepy.','Cleanup from your answers: {d} sets of deleted exercises, {l} old cable sets logged as pin numbers, {f} fixed typos.'],stGo:['Importovat {n} tréninků','Import {n} workouts'],stDone:['Importováno {n} tréninků','Imported {n} workouts'],stBad:['Tohle nevypadá jako CSV export ze Strongu','This does not look like a Strong CSV export']});
 
 render();
 </script>
